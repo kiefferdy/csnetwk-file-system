@@ -9,6 +9,7 @@ public class ClientHandler extends Thread {
     private BufferedReader reader;
     private PrintWriter writer;
     private static final Set<String> registeredUsers = Collections.synchronizedSet(new HashSet<>());
+    private boolean isRegistered = false;
 
     public ClientHandler(Socket socket) {
         this.socket = socket;
@@ -38,43 +39,46 @@ public class ClientHandler extends Thread {
     }
 
     private void handleClientCommand(String clientCommand) {
-        synchronized (registeredUsers) {
-            if (clientCommand.startsWith("/register ")) {
-                String handle = clientCommand.substring(10).trim();
+        if (clientCommand.startsWith("/register ")) {
+            String handle = clientCommand.substring(10).trim();
+            synchronized (registeredUsers) {
                 if (!registeredUsers.contains(handle)) {
                     registeredUsers.add(handle);
                     writer.println("Handle registered: " + handle);
+                    isRegistered = true; // Set the flag to true on successful registration
                 } else {
                     writer.println("Error: Handle already exists");
                 }
             }
-        }
-
-        if (clientCommand.startsWith("/store ")) {
-            String filename = clientCommand.substring(7); // Extract filename
-            writer.println("START"); // Signal to start file transfer
-            receiveFile(filename);
-            writer.println("END"); // Signal end of file transfer
-        }
-
-        if (clientCommand.equals("/dir")) {
-            File dir = new File("."); // Current directory
-            File[] filesList = dir.listFiles();
-            if (filesList != null) {
-                for (File file : filesList) {
-                    if (file.isFile()) {
-                        writer.println(file.getName());
+        } else if (!isRegistered) {
+            writer.println("Error: You must register first with /register <handle>");
+        } else {
+            if (clientCommand.startsWith("/store ")) {
+                String filename = clientCommand.substring(7); // Extract filename
+                writer.println("START"); // Signal to start file transfer
+                writer.flush(); // Ensure the message is sent immediately
+                System.out.println("Server: Sending START signal for file transfer."); // Debugging
+                receiveFile(filename);
+                writer.println("END"); // Signal end of file transfer
+                writer.flush(); // Ensure the message is sent immediately
+                System.out.println("Server: Sending END signal for file transfer."); // Debugging
+            }
+            if (clientCommand.equals("/dir")) {
+                File dir = new File("./files"); // Current directory
+                File[] filesList = dir.listFiles();
+                if (filesList != null) {
+                    for (File file : filesList) {
+                        if (file.isFile()) {
+                            writer.println(file.getName());
+                        }
                     }
                 }
             }
+            if (clientCommand.startsWith("/get ")) {
+                String filename = clientCommand.substring(5); // Extract filename
+                sendFile(filename);
+            }
         }
-
-        if (clientCommand.startsWith("/get ")) {
-            String filename = clientCommand.substring(5); // Extract filename
-            sendFile(filename);
-        }
-
-        // ... other command handling logic ...
     }
 
     private void sendFile(String filename) {
@@ -96,15 +100,26 @@ public class ClientHandler extends Thread {
     }
 
     private void receiveFile(String filename) {
-        try (FileOutputStream fileOut = new FileOutputStream(filename);
+        File directory = new File("files");
+        if (!directory.exists()) {
+            directory.mkdir(); 
+        }
+    
+        File file = new File(directory, filename);
+        try (FileOutputStream fileOut = new FileOutputStream(file);
              DataInputStream dataIn = new DataInputStream(socket.getInputStream())) {
+            // Read the file size first
+            long fileSize = dataIn.readLong();
+            long totalBytesRead = 0;
             byte[] buffer = new byte[4096];
             int bytesRead;
-            while ((bytesRead = dataIn.read(buffer)) != -1) {
+            while (totalBytesRead < fileSize && (bytesRead = dataIn.read(buffer)) != -1) {
                 fileOut.write(buffer, 0, bytesRead);
+                totalBytesRead += bytesRead;
             }
+            System.out.println("Server: File received and saved."); // Debugging
         } catch (IOException e) {
             System.out.println("Error receiving file: " + e.getMessage());
         }
-    }
+    }     
 }

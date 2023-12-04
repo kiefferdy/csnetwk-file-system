@@ -6,16 +6,10 @@ public class FileExchangeClient {
     private BufferedReader consoleReader, serverResponse;
     private PrintWriter serverWriter;
 
-    public FileExchangeClient(String hostname, int port) throws Exception {
-        this.socket = new Socket(hostname, port);
-        System.out.println("Connected to the server");
-
+    public FileExchangeClient() {
         this.consoleReader = new BufferedReader(new InputStreamReader(System.in));
-        this.serverResponse = new BufferedReader(new InputStreamReader(socket.getInputStream()));
-        this.serverWriter = new PrintWriter(socket.getOutputStream(), true);
-
-        // Start a thread to listen to server responses
-        new ServerListener(socket).start();
+        this.serverResponse = null;
+        this.serverWriter = null;
     }
 
     public void start() {
@@ -37,14 +31,31 @@ public class FileExchangeClient {
     }
 
     private void processCommand(String command) throws IOException {
-        if (command.startsWith("/store ")) {
+        if (command.startsWith("/join ")) {
+            String[] parts = command.split(" ");
+            if (parts.length == 3) {
+                String hostname = parts[1];
+                int port = Integer.parseInt(parts[2]);
+                try {
+                    connectToServer(hostname, port);
+                } catch (IOException e) {
+                    System.out.println("Error connecting to server: " + e.getMessage());
+                }
+            } else {
+                System.out.println("Invalid command. Usage: /join <server-ip> <port>");
+            }
+        } else if (command.startsWith("/store ")) {
             String filename = command.substring(7); // Extract filename
             serverWriter.println(command); // Inform server about file transfer
-            // Wait for server to signal start
-            if (serverResponse.readLine().equals("START")) {
+            serverWriter.flush(); // Ensure the message is sent immediately
+
+            String serverSignal = serverResponse.readLine();
+            System.out.println("Client: Received signal from server: " + serverSignal); // Debugging
+            if ("START".equals(serverSignal)) {
                 sendFile(filename);
-                // Wait for server to signal end
-                if (serverResponse.readLine().equals("END")) {
+                serverSignal = serverResponse.readLine();
+                System.out.println("Client: Received signal from server: " + serverSignal); // Debugging
+                if ("END".equals(serverSignal)) {
                     System.out.println("File transfer completed.");
                 }
             }
@@ -63,7 +74,7 @@ public class FileExchangeClient {
             try {
                 socket.close();
                 System.out.println("Disconnected from the server.");
-                System.exit(0); // Or handle this differently if you want to keep the client running
+                System.exit(0); // Could be handled differently to keep the client running
             } catch (IOException e) {
                 System.out.println("Error while disconnecting: " + e.getMessage());
             }
@@ -85,16 +96,34 @@ public class FileExchangeClient {
         System.out.println("/? - Show this help message.");
     }
 
+    private void connectToServer(String hostname, int port) throws IOException {
+        this.socket = new Socket(hostname, port);
+        System.out.println("Connected to the server");
+    
+        this.serverResponse = new BufferedReader(new InputStreamReader(socket.getInputStream()));
+        this.serverWriter = new PrintWriter(socket.getOutputStream(), true);
+    
+        // Start a thread to listen to server responses
+        new ServerListener(socket).start();
+    }    
+
     private void sendFile(String filename) {
         File file = new File(filename);
         if (file.exists()) {
+            long fileSize = file.length();
             try (FileInputStream fileIn = new FileInputStream(file);
-                DataOutputStream dataOut = new DataOutputStream(socket.getOutputStream())) {
+                 DataOutputStream dataOut = new DataOutputStream(socket.getOutputStream())) {
+                // Send the file size first
+                dataOut.writeLong(fileSize);
+                dataOut.flush();
+    
                 byte[] buffer = new byte[4096];
                 int bytesRead;
                 while ((bytesRead = fileIn.read(buffer)) != -1) {
                     dataOut.write(buffer, 0, bytesRead);
                 }
+                dataOut.flush(); // Ensure the file data is sent immediately
+                System.out.println("Client: File sent."); // Debugging
             } catch (IOException e) {
                 System.out.println("Error sending file: " + e.getMessage());
             }
@@ -117,17 +146,12 @@ public class FileExchangeClient {
     }
 
     public static void main(String[] args) {
-        // The client now needs the server IP and port to start.
-        // For testing, you can hardcode these values or pass them as arguments.
-        String hostname = "localhost"; // Example hostname
-        int port = 5000; // Example port
-
         try {
-            FileExchangeClient client = new FileExchangeClient(hostname, port);
+            FileExchangeClient client = new FileExchangeClient();
             client.start();
         } catch (Exception e) {
             System.out.println("Client exception: " + e.getMessage());
             e.printStackTrace();
         }
-    }
+    }    
 }
