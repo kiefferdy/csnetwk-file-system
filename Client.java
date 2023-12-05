@@ -145,21 +145,15 @@ public class Client {
     }
 
     private void handleDirResponse() {
-        new Thread(() -> {
-            try {
-                String serverResponse;
-                while (!(serverResponse = dataIn.readUTF()).equals("END_OF_DIR")) {
-                    String finalResponse = serverResponse; // effectively final variable for lambda
-                    SwingUtilities.invokeLater(() -> {
-                        updateResponseArea(finalResponse + "\n" + separator);
-                    });
-                }
-            } catch (IOException e) {
-                SwingUtilities.invokeLater(() -> {
-                    updateResponseArea("Error receiving directory listing: " + e.getMessage() + "\n" + separator);
-                });
+        try {
+            String[] fileNames = this.dataIn.readUTF().split(",");
+            for (String fileName : fileNames) {
+                updateResponseArea("[Server] " + fileName + "\n");
             }
-        }).start();
+        } catch (IOException e) {
+            updateResponseArea("Error receiving server file directory: " + e.getMessage() + "\n" + separator);
+        }
+        updateResponseArea(separator);
     }
 
     private void printHelp() {
