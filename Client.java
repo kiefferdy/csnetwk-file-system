@@ -1,0 +1,234 @@
+import javax.swing.*;
+import java.awt.*;
+import java.awt.event.ActionEvent;
+import java.io.*;
+import java.net.Socket;
+
+public class Client {
+
+    private JFrame frame;
+    private JTextField commandInputField;
+    private JTextArea responseArea;
+    private JButton sendButton;
+    private Socket socket;
+    private DataOutputStream dataOut;
+    private DataInputStream dataIn;
+    private final String separator = "-------------------------------------------------------------------------------------------\n";
+
+    public Client() {
+        initializeGUI();
+    }
+
+    private void initializeGUI() {
+        frame = new JFrame("Client");
+        frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+        frame.setSize(400, 300);
+        frame.setLayout(new BorderLayout());
+
+        commandInputField = new JTextField();
+        responseArea = new JTextArea();
+        responseArea.setEditable(false);
+        sendButton = new JButton("Send");
+
+        frame.add(commandInputField, BorderLayout.NORTH);
+        frame.add(new JScrollPane(responseArea), BorderLayout.CENTER);
+        frame.add(sendButton, BorderLayout.SOUTH);
+
+        sendButton.addActionListener(e -> sendCommand());
+
+        frame.setVisible(true);
+    }
+
+    private void sendCommand() {
+    try {
+            String command = commandInputField.getText().trim();
+            commandInputField.setText(""); // Clear the input field
+
+            if (command.startsWith("/join ")) {
+                String[] parts = command.split(" ");
+                if (parts.length == 3) {
+                    String hostname = parts[1];
+                    int port = Integer.parseInt(parts[2]);
+                    connectToServer(hostname, port);
+                } else {
+                    updateResponseArea("Invalid command. Usage: /join <server-ip> <port>\n" + separator);
+                }
+            } else if (command.startsWith("/store ")) {
+                handleStoreCommand(command);
+            } else if (command.startsWith("/get ")) {
+                handleGetCommand(command);
+            } else if (command.equals("/leave")) {
+                disconnectFromServer();
+            } else if (command.equals("/dir")) {
+                sendCommandToServer(command);
+                handleDirResponse();
+            } else if (command.equals("/?")) {
+                printHelp();
+            } else {
+                sendCommandToServer(command);
+                readServerResponse();
+            }
+        } catch (IOException e) {
+        updateResponseArea("IO Exception: " + e.getMessage() + "\n" + separator);
+        }
+    }
+
+    private void connectToServer(String hostname, int port) {
+        try {
+            socket = new Socket(hostname, port);
+            dataOut = new DataOutputStream(socket.getOutputStream());
+            dataIn = new DataInputStream(new BufferedInputStream(socket.getInputStream()));
+            updateResponseArea("Connected to server at " + hostname + ":" + port + "\n" + separator);
+        } catch (IOException e) {
+            updateResponseArea("Failed to connect to server: " + e.getMessage() + "\n" + separator);
+        }
+    }  
+
+    private void disconnectFromServer() {
+        try {
+            if (socket != null && !socket.isClosed()) {
+                dataOut.writeUTF("/leave");
+                dataOut.flush();
+                socket.close();
+                updateResponseArea("Disconnected from the server.\n");
+            }
+        } catch (IOException e) {
+            updateResponseArea("Error while disconnecting: " + e.getMessage() + "\n" + separator);
+        }
+    }
+
+    private void handleDirResponse() {
+        new Thread(() -> {
+            try {
+                String serverResponse;
+                while (!(serverResponse = dataIn.readUTF()).equals("END_OF_DIR")) {
+                    String finalResponse = serverResponse; // effectively final variable for lambda
+                    SwingUtilities.invokeLater(() -> {
+                        updateResponseArea(finalResponse + "\n" + separator);
+                    });
+                }
+            } catch (IOException e) {
+                SwingUtilities.invokeLater(() -> {
+                    updateResponseArea("Error receiving directory listing: " + e.getMessage() + "\n" + separator);
+                });
+            }
+        }).start();
+    }
+
+    private void printHelp() {
+        SwingUtilities.invokeLater(() -> {
+            updateResponseArea("Available commands:\n");
+            updateResponseArea("/join <server_ip> <port> - Connect to the server.\n");
+            updateResponseArea("/leave - Disconnect from the server.\n");
+            updateResponseArea("/register <handle> - Register your handle.\n");
+            updateResponseArea("/store <filename> - Send a file to the server.\n");
+            updateResponseArea("/get <filename> - Download a file from the server.\n");
+            updateResponseArea("/dir - List files in the server's directory.\n");
+            updateResponseArea("/? - Show this help message.\n" + separator);
+        });
+    }
+
+    private void updateResponseArea(String message) {
+        SwingUtilities.invokeLater(() -> {
+            responseArea.append(message);
+        });
+    }
+
+
+    private void handleStoreCommand(String command) throws IOException {
+        String filename = command.substring(7); // Extract filename
+        File file = new File(filename);
+        if (file.exists()) {
+            sendCommandToServer(command); // Send '/store' command to server
+
+            String serverSignal = this.dataIn.readUTF();
+            if (serverSignal.equals("START_OF_FILE")) {
+                sendFile(filename);
+                serverSignal = this.dataIn.readUTF();
+                if (serverSignal.equals("END_OF_FILE")) {
+                    updateResponseArea("File transfer completed." + "\n" + separator);
+                }
+            }
+        } else {
+            updateResponseArea("File not found: " + filename + "\n" + separator);
+        }
+    }
+
+    private void handleGetCommand(String command) throws IOException {
+        sendCommandToServer(command); // Send '/get' command to server
+
+        String serverSignal = this.dataIn.readUTF();
+        if (serverSignal.equals("START_OF_FILE")) {
+            String filename = command.substring(5); // Extract filename
+            receiveFile(filename);
+            serverSignal = this.dataIn.readUTF();
+            if (serverSignal.equals("END_OF_FILE")) {
+                updateResponseArea("File received from Server: " + filename + "\n" + separator);
+            }
+        } else {
+            updateResponseArea(serverSignal + "\n" + separator); // May be an error message
+        }
+    }
+
+    private void sendCommandToServer(String command) throws IOException {
+        this.dataOut.writeUTF(command);
+        this.dataOut.flush();
+    }
+
+    private void readServerResponse() throws IOException {
+        String response = this.dataIn.readUTF();
+        updateResponseArea("[Server] " + response + "\n" + separator);
+    }
+
+    private void sendFile(String filename) {
+        File file = new File(filename);
+        try (FileInputStream fileIn = new FileInputStream(file)) {
+            long fileSize = file.length();
+            this.dataOut.writeLong(fileSize);
+            this.dataOut.flush();
+
+            byte[] buffer = new byte[4096];
+            int bytesRead;
+            while ((bytesRead = fileIn.read(buffer)) != -1) {
+                this.dataOut.write(buffer, 0, bytesRead);
+            }
+            this.dataOut.flush();
+            updateResponseArea("File sent to Server: " + filename + "\n" + separator);
+        } catch (IOException e) {
+            updateResponseArea("Error sending file: " + e.getMessage() + "\n" + separator);
+        }
+    }
+
+    private void receiveFile(String filename) throws IOException {
+        // Specify the directory where files should be saved
+        File directory = new File("./client_downloads");
+        if (!directory.exists()) {
+            directory.mkdir(); // Create the directory if it doesn't exist
+        }
+    
+        // Create a file reference within that directory
+        File file = new File(directory, filename);
+    
+        try (FileOutputStream fileOut = new FileOutputStream(file)) {
+            // Read the file size first
+            long fileSize = this.dataIn.readLong();
+            long totalBytesRead = 0;
+            byte[] buffer = new byte[4096];
+            int bytesRead;
+    
+            while (totalBytesRead < fileSize) {
+                bytesRead = dataIn.read(buffer, 0, Math.min(buffer.length, (int)(fileSize - totalBytesRead)));
+                fileOut.write(buffer, 0, bytesRead);
+                totalBytesRead += bytesRead;
+            }
+    
+            updateResponseArea("The received file was saved to " + file.getAbsolutePath() + "\n" + separator);
+        } catch (IOException e) {
+            updateResponseArea("Error receiving file: " + e.getMessage() + "\n" + separator);
+        }
+    }
+
+    public static void main(String[] args) {
+        SwingUtilities.invokeLater(() -> new Client());
+    }
+}
