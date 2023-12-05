@@ -99,7 +99,7 @@ public class Client {
                 dataOut.writeUTF("/leave");
                 dataOut.flush();
                 socket.close();
-                updateResponseArea("Disconnected from the server.\n");
+                updateResponseArea("Disconnected from the server.\n" + separator);
             }
         } catch (IOException e) {
             updateResponseArea("Error while disconnecting: " + e.getMessage() + "\n" + separator);

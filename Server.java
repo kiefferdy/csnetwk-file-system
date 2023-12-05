@@ -21,6 +21,7 @@ public class Server {
         frame.setLayout(new BorderLayout());
 
         logArea = new JTextArea();
+        logArea.setEditable(false);
         startServerButton = new JButton("Start Server");
 
         startServerButton.addActionListener(new ActionListener() {
@@ -36,7 +37,6 @@ public class Server {
 
         frame.add(new JScrollPane(logArea), BorderLayout.CENTER);
         frame.add(startServerButton, BorderLayout.SOUTH);
-
         frame.setVisible(true);
     }
 
