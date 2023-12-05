@@ -14,6 +14,8 @@ public class Client {
     private DataOutputStream dataOut;
     private DataInputStream dataIn;
     private final String separator = "---------------------------------------------------------------------------------------------------------------------------------------------\n";
+    private boolean isConnected = false;
+    private boolean isRegistered = false;
 
     public Client() {
         initializeGUI();
@@ -41,45 +43,78 @@ public class Client {
 
     private void sendCommand() {
         try {
-                String command = commandInputField.getText().trim();
-                commandInputField.setText(""); // Clear the input field
+            String command = commandInputField.getText().trim();
+            commandInputField.setText(""); // Clear the input field
 
-                if (command.startsWith("/join ")) {
-                    String[] parts = command.split(" ");
-                    if (parts.length == 3) {
-                        String hostname = parts[1];
-                        int port = Integer.parseInt(parts[2]);
-                        connectToServer(hostname, port);
-                    } else {
-                        updateResponseArea("Invalid command. Usage: /join <server-ip> <port>\n" + separator);
-                    }
-                } else if (command.startsWith("/store ")) {
-                    handleStoreCommand(command);
-                } else if (command.startsWith("/get ")) {
-                    handleGetCommand(command);
-                } else if (command.equals("/leave")) {
-                    disconnectFromServer();
-                } else if (command.equals("/dir")) {
-                    sendCommandToServer(command);
-                    handleDirResponse();
-                } else if (command.equals("/?")) {
-                    printHelp();
-                } else if (command.startsWith("/register ")){
-                    sendCommandToServer(command);
-                    readServerResponse(command);
-                } else {
-                    SwingUtilities.invokeLater(() -> {
-                        JOptionPane.showMessageDialog(frame,
-                                "That is not a valid input. Please use \"/?\" to see the valid commands.",
-                                "Invalid Command",
-                                JOptionPane.ERROR_MESSAGE);
-                    });
-                }
-            } catch (IOException e) {
+            if (command.equals("/?")) {
+                printHelp();
+                return;
+            } 
+            
+            if (!isConnected && !command.startsWith("/join ")) {
                 SwingUtilities.invokeLater(() -> {
-                    updateResponseArea("IO Exception: " + e.getMessage() + "\n" + separator);
+                    JOptionPane.showMessageDialog(frame,
+                        "Not connected to any server. Please connect to a server first.",
+                        "Not Connected",
+                        JOptionPane.ERROR_MESSAGE);
                 });
-    }
+                return;
+            }
+
+            // Handle /join command
+            if (command.startsWith("/join ")) {
+                String[] parts = command.split(" ");
+                if (parts.length == 3) {
+                    String hostname = parts[1];
+                    int port = Integer.parseInt(parts[2]);
+                    connectToServer(hostname, port);
+                } else {
+                    updateResponseArea("Invalid command. Usage: /join <server-ip> <port>\n" + separator);
+                }
+                return; // Return after handling /join
+            }
+
+            // Check if the user is not registered for certain commands
+            if (!isRegistered && (command.startsWith("/store ") || command.startsWith("/get ") ||
+                                command.startsWith("/broadcast ") || command.equals("/dir"))) {
+                SwingUtilities.invokeLater(() -> {
+                    JOptionPane.showMessageDialog(frame,
+                        "You must be registered to use this command.",
+                        "Not Registered",
+                        JOptionPane.ERROR_MESSAGE);
+                });
+                return;
+            }
+
+            // Process other commands
+            if (command.startsWith("/store ")) {
+                handleStoreCommand(command);
+            } else if (command.startsWith("/get ")) {
+                handleGetCommand(command);
+            } else if (command.equals("/leave")) {
+                disconnectFromServer();
+            } else if (command.equals("/dir")) {
+                sendCommandToServer(command);
+                handleDirResponse();
+            } else if (command.startsWith("/register ")) {
+                sendCommandToServer(command);
+                readServerResponse(command);
+            } else if (command.startsWith("/broadcast ")) {
+                sendCommandToServer(command);
+                readServerResponse(command);
+            } else {
+                SwingUtilities.invokeLater(() -> {
+                    JOptionPane.showMessageDialog(frame,
+                            "That is not a valid input. Please use \"/?\" to see the valid commands.",
+                            "Invalid Command",
+                            JOptionPane.ERROR_MESSAGE);
+                });
+            }
+        } catch (IOException e) {
+            SwingUtilities.invokeLater(() -> {
+                updateResponseArea("IO Exception: " + e.getMessage() + "\n" + separator);
+            });
+        }
     }
 
     private void connectToServer(String hostname, int port) {
@@ -88,6 +123,7 @@ public class Client {
             dataOut = new DataOutputStream(socket.getOutputStream());
             dataIn = new DataInputStream(new BufferedInputStream(socket.getInputStream()));
             updateResponseArea("Connected to server at " + hostname + ":" + port + "\n" + separator);
+            isConnected = true;
         } catch (IOException e) {
             updateResponseArea("Failed to connect to server: " + e.getMessage() + "\n" + separator);
         }
@@ -100,6 +136,8 @@ public class Client {
                 dataOut.flush();
                 socket.close();
                 updateResponseArea("Disconnected from the server.\n" + separator);
+                isConnected = false;
+                isRegistered = false;
             }
         } catch (IOException e) {
             updateResponseArea("Error while disconnecting: " + e.getMessage() + "\n" + separator);
@@ -190,19 +228,21 @@ public class Client {
     }
 
     private void readServerResponse(String commandType) throws IOException {
-        StringBuilder responseBuilder = new StringBuilder();
-        String line;
+    StringBuilder responseBuilder = new StringBuilder();
+    String line;
 
-        if (commandType.startsWith("/register ")) {
-            while (!(line = this.dataIn.readUTF()).equals("END_OF_RESPONSE")) {
-                responseBuilder.append(line).append("\n");
+    if (commandType.startsWith("/register ")) {
+        while (!(line = this.dataIn.readUTF()).equals("END_OF_RESPONSE")) {
+            responseBuilder.append(line).append("\n");
+            if (line.startsWith("Welcome")) { // Check if the line starts with "Welcome"
+                isRegistered = true; // Set isRegistered to true if registration is successful
             }
         }
-
-        SwingUtilities.invokeLater(() -> {
-            updateResponseArea("[Server] " + responseBuilder.toString() + separator);
-        });
     }
+    SwingUtilities.invokeLater(() -> {
+        updateResponseArea("[Server] " + responseBuilder.toString() + separator);
+    });
+}
 
     private void sendFile(String filename) {
         File file = new File(filename);
