@@ -48,11 +48,10 @@ public class Server {
 
     private void startServer() {
         try {
-            serverSocket = new ServerSocket(5000);
+            serverSocket = new ServerSocket(12345);
             isServerRunning = true;
             startServerButton.setText("Stop Server");
-            logArea.append("Server started on port 5000\n");
-            
+            logArea.append("Server started on port " + serverSocket.getLocalPort() + "\n");                        
             Thread serverThread = new Thread(() -> {
                 try {
                     while (!serverSocket.isClosed()) {
