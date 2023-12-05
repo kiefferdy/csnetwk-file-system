@@ -181,5 +181,24 @@ public class ClientHandler extends Thread {
         } catch (IOException e) {
             System.out.println("Error receiving file '" + filename + "': " + e.getMessage());
         }
-    }    
+    }
+
+    public void closeConnection() {
+        try {
+            // Close the input and output streams first
+            if (dataOut != null) {
+                dataOut.close();
+            }
+            if (dataIn != null) {
+                dataIn.close();
+            }
+            // Close the socket
+            if (socket != null && !socket.isClosed()) {
+                socket.close();
+            }
+            System.out.println("Connection with client closed.");
+        } catch (IOException e) {
+            System.out.println("Error closing client connection: " + e.getMessage());
+        }
+    }
 }

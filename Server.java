@@ -5,6 +5,7 @@ import java.awt.event.ActionListener;
 import java.io.IOException;
 import java.net.ServerSocket;
 import java.net.Socket;
+import java.util.ArrayList;
 
 public class Server {
 
@@ -13,6 +14,7 @@ public class Server {
     private JButton startServerButton;
     private ServerSocket serverSocket;
     private boolean isServerRunning = false;
+    private final ArrayList<ClientHandler> clientHandlers = new ArrayList<>();
 
     public Server() {
         frame = new JFrame("Server");
@@ -51,29 +53,38 @@ public class Server {
             serverSocket = new ServerSocket(12345);
             isServerRunning = true;
             startServerButton.setText("Stop Server");
-            logArea.append("Server started on port " + serverSocket.getLocalPort() + "\n");                        
+            logArea.append("Server started on port " + serverSocket.getLocalPort() + "\n");
+    
             Thread serverThread = new Thread(() -> {
                 try {
                     while (!serverSocket.isClosed()) {
                         Socket socket = serverSocket.accept();
                         logArea.append("New client connected: " + socket.getInetAddress().getHostAddress() + "\n");
-
+    
                         // Instantiate ClientHandler for each connected client
-                        new Thread(new ClientHandler(socket, this)).start();
+                        ClientHandler clientHandler = new ClientHandler(socket, this);
+                        clientHandlers.add(clientHandler); // Add the new client handler to the list
+                        new Thread(clientHandler).start();
                     }
                 } catch (IOException e) {
-                    logArea.append("Error accepting client connection: " + e.getMessage() + "\n");
+                    logArea.append("Server stopped.\n");
                 }
             });
             serverThread.start();
-
+    
         } catch (IOException e) {
             logArea.append("Error starting server: " + e.getMessage() + "\n");
         }
-    }
+    }    
 
     private void stopServer() {
         try {
+            // Close all client connections
+            for (ClientHandler clientHandler : clientHandlers) {
+                clientHandler.closeConnection();
+            }
+            clientHandlers.clear();
+
             if (!serverSocket.isClosed()) {
                 serverSocket.close();
             }
