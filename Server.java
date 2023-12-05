@@ -90,7 +90,6 @@ public class Server {
             }
             isServerRunning = false;
             startServerButton.setText("Start Server");
-            logArea.append("Server stopped.\n");
         } catch (IOException e) {
             logArea.append("Error stopping server: " + e.getMessage() + "\n");
         }
