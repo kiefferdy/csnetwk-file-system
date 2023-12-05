@@ -13,7 +13,7 @@ public class Client {
     private Socket socket;
     private DataOutputStream dataOut;
     private DataInputStream dataIn;
-    private final String separator = "-------------------------------------------------------------------------------------------\n";
+    private final String separator = "---------------------------------------------------------------------------------------------------------------------------------------------\n";
 
     public Client() {
         initializeGUI();
@@ -22,7 +22,7 @@ public class Client {
     private void initializeGUI() {
         frame = new JFrame("Client");
         frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
-        frame.setSize(400, 300);
+        frame.setSize(600, 400);
         frame.setLayout(new BorderLayout());
 
         commandInputField = new JTextField();
@@ -40,37 +40,46 @@ public class Client {
     }
 
     private void sendCommand() {
-    try {
-            String command = commandInputField.getText().trim();
-            commandInputField.setText(""); // Clear the input field
+        try {
+                String command = commandInputField.getText().trim();
+                commandInputField.setText(""); // Clear the input field
 
-            if (command.startsWith("/join ")) {
-                String[] parts = command.split(" ");
-                if (parts.length == 3) {
-                    String hostname = parts[1];
-                    int port = Integer.parseInt(parts[2]);
-                    connectToServer(hostname, port);
+                if (command.startsWith("/join ")) {
+                    String[] parts = command.split(" ");
+                    if (parts.length == 3) {
+                        String hostname = parts[1];
+                        int port = Integer.parseInt(parts[2]);
+                        connectToServer(hostname, port);
+                    } else {
+                        updateResponseArea("Invalid command. Usage: /join <server-ip> <port>\n" + separator);
+                    }
+                } else if (command.startsWith("/store ")) {
+                    handleStoreCommand(command);
+                } else if (command.startsWith("/get ")) {
+                    handleGetCommand(command);
+                } else if (command.equals("/leave")) {
+                    disconnectFromServer();
+                } else if (command.equals("/dir")) {
+                    sendCommandToServer(command);
+                    handleDirResponse();
+                } else if (command.equals("/?")) {
+                    printHelp();
+                } else if (command.startsWith("/register ")){
+                    sendCommandToServer(command);
+                    readServerResponse(command);
                 } else {
-                    updateResponseArea("Invalid command. Usage: /join <server-ip> <port>\n" + separator);
+                    SwingUtilities.invokeLater(() -> {
+                        JOptionPane.showMessageDialog(frame,
+                                "That is not a valid input. Please use \"/?\" to see the valid commands.",
+                                "Invalid Command",
+                                JOptionPane.ERROR_MESSAGE);
+                    });
                 }
-            } else if (command.startsWith("/store ")) {
-                handleStoreCommand(command);
-            } else if (command.startsWith("/get ")) {
-                handleGetCommand(command);
-            } else if (command.equals("/leave")) {
-                disconnectFromServer();
-            } else if (command.equals("/dir")) {
-                sendCommandToServer(command);
-                handleDirResponse();
-            } else if (command.equals("/?")) {
-                printHelp();
-            } else {
-                sendCommandToServer(command);
-                readServerResponse();
-            }
-        } catch (IOException e) {
-        updateResponseArea("IO Exception: " + e.getMessage() + "\n" + separator);
-        }
+            } catch (IOException e) {
+                SwingUtilities.invokeLater(() -> {
+                    updateResponseArea("IO Exception: " + e.getMessage() + "\n" + separator);
+                });
+    }
     }
 
     private void connectToServer(String hostname, int port) {
@@ -121,8 +130,8 @@ public class Client {
             updateResponseArea("/join <server_ip> <port> - Connect to the server.\n");
             updateResponseArea("/leave - Disconnect from the server.\n");
             updateResponseArea("/register <handle> - Register your handle.\n");
-            updateResponseArea("/store <filename> - Send a file to the server.\n");
-            updateResponseArea("/get <filename> - Download a file from the server.\n");
+            updateResponseArea("/store <filename> - Send a file to the server. Include the File Type in the command (.txt)\n");
+            updateResponseArea("/get <filename> - Download a file from the server. Include the File Type in the command (.txt)\n");
             updateResponseArea("/dir - List files in the server's directory.\n");
             updateResponseArea("/? - Show this help message.\n" + separator);
         });
@@ -178,6 +187,21 @@ public class Client {
     private void readServerResponse() throws IOException {
         String response = this.dataIn.readUTF();
         updateResponseArea("[Server] " + response + "\n" + separator);
+    }
+
+    private void readServerResponse(String commandType) throws IOException {
+        StringBuilder responseBuilder = new StringBuilder();
+        String line;
+
+        if (commandType.startsWith("/register ")) {
+            while (!(line = this.dataIn.readUTF()).equals("END_OF_RESPONSE")) {
+                responseBuilder.append(line).append("\n");
+            }
+        }
+
+        SwingUtilities.invokeLater(() -> {
+            updateResponseArea("[Server] " + responseBuilder.toString() + separator);
+        });
     }
 
     private void sendFile(String filename) {

@@ -60,18 +60,18 @@ public class ClientHandler extends Thread {
             } else {
                 if (clientCommand.startsWith("/store ")) {
                     handleStoreCommand(clientCommand);
-                } else if (clientCommand.equals("/dir")) {
-                    handleDirCommand();
                 } else if (clientCommand.startsWith("/get ")) {
                     handleGetCommand(clientCommand);
+                } else if (clientCommand.equals("/dir")) {
+                    handleDirCommand();
                 } else {
                     sendMessageToClient("Unknown command! Type \"/?\" for a list of commands.");
                 }
             }
         } catch (IOException e) {
             System.out.println("Error handling client command: " + e.getMessage());
-        }
-    }    
+        } 
+    }
 
     private void handleRegisterCommand(String clientCommand) throws IOException {
         String handle = clientCommand.substring(10).trim();
@@ -83,6 +83,7 @@ public class ClientHandler extends Thread {
             } else {
                 sendMessageToClient("Error: Handle already exists");
             }
+            sendMessageToClient("END_OF_RESPONSE"); // End of response signal
         }
     }
 
