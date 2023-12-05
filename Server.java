@@ -78,10 +78,15 @@ public class Server {
                 serverSocket.close();
             }
             isServerRunning = false;
-            startServerButton.setText("Start Server");
-            logArea.append("Server stopped.\n");
+            logArea.append("Server stopped. Shutting down application.\n");
+
+            // This will shut down the entire application, including the GUI.
+            System.exit(0);
+
         } catch (IOException e) {
             logArea.append("Error stopping server: " + e.getMessage() + "\n");
+            // Consider shutting down even in case of an error.
+            System.exit(1); // Non-zero value indicates abnormal termination.
         }
     }
 
