@@ -92,6 +92,8 @@ public class Server {
             startServerButton.setText("Start Server");
         } catch (IOException e) {
             logArea.append("Error stopping server: " + e.getMessage() + "\n");
+            // Consider shutting down even in case of an error.
+            System.exit(1); // Non-zero value indicates abnormal termination.
         }
     }
 
