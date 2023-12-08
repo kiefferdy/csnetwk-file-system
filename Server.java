@@ -62,7 +62,7 @@ public class Server {
                         logArea.append("New client connected: " + socket.getInetAddress().getHostAddress() + "\n");
     
                         // Instantiate ClientHandler for each connected client
-                        ClientHandler clientHandler = new ClientHandler(socket, this);
+                        ClientHandler clientHandler = new ClientHandler(socket);
                         clientHandlers.add(clientHandler); // Add the new client handler to the list
                         new Thread(clientHandler).start();
                     }

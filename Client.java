@@ -1,6 +1,5 @@
 import javax.swing.*;
 import java.awt.*;
-import java.awt.event.ActionEvent;
 import java.io.*;
 import java.net.Socket;
 
@@ -214,11 +213,6 @@ public class Client {
     private void sendCommandToServer(String command) throws IOException {
         this.dataOut.writeUTF(command);
         this.dataOut.flush();
-    }
-
-    private void readServerResponse() throws IOException {
-        String response = this.dataIn.readUTF();
-        updateResponseArea("[Server] " + response + "\n" + separator);
     }
 
     private void readServerResponse(String commandType) throws IOException {

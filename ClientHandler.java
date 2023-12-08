@@ -6,15 +6,13 @@ import java.util.Set;
 
 public class ClientHandler extends Thread {
     private Socket socket;
-    private Server server;
     private DataInputStream dataIn;
     private DataOutputStream dataOut;
     private static final Set<String> registeredUsers = Collections.synchronizedSet(new HashSet<>());
     private boolean isRegistered = false;
 
-    public ClientHandler(Socket socket, Server server) {
+    public ClientHandler(Socket socket) {
         this.socket = socket;
-        this.server = server;
         try {
             this.dataIn = new DataInputStream(new BufferedInputStream(socket.getInputStream()));
             this.dataOut = new DataOutputStream(socket.getOutputStream());
